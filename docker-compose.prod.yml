@@ -1,0 +1,21 @@
+services:
+  api:
+    restart: always
+    environment:
+      PYTHONPATH: /app:/deseq_src/backend
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  worker:
+    restart: always
+    environment:
+      PYTHONPATH: /app:/deseq_src/backend
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+
+  db:
+    ports: []
