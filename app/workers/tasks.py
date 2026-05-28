@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import procrastinate
 from procrastinate.psycopg_connector import PsycopgConnector
 
+import app.models  # noqa: F401 — ensures all ORM models registered before any query
 from app.config import settings
 
 logger = logging.getLogger(__name__)

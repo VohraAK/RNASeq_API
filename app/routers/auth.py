@@ -5,6 +5,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.dependencies import get_db
 from app.limiter import limiter
 from app.models.refresh_token import RefreshToken
@@ -30,14 +31,14 @@ def _set_refresh_cookie(response: Response, raw_token: str) -> None:
         key=_REFRESH_COOKIE,
         value=raw_token,
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(key=_REFRESH_COOKIE, httponly=True, secure=True, samesite="lax")
+    response.delete_cookie(key=_REFRESH_COOKIE, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax")
 
 
 @router.post("/register", status_code=201)

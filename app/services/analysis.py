@@ -43,10 +43,10 @@ def run(
             mf.write(metadata_bytes)
             metadata_path = mf.name
 
-        engine = DESeqEngine()
+        engine = DESeqEngine(counts_path, metadata_path)
 
         try:
-            engine.load_data(counts_path, metadata_path)
+            engine.load_data()
         except Exception as exc:
             raise AnalysisError("INVALID_FILE_FORMAT", "Failed to load input data.") from exc
 
