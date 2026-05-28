@@ -135,3 +135,7 @@ SECRET_KEY=<64 char hex>
 ALLOWED_ORIGINS=http://localhost:3000
 UPLOAD_DIR=/var/rnaseq/uploads
 ```
+
+---
+## API Swagger Docs
+![API Docs](/assets/api-doc.png)
