@@ -32,7 +32,7 @@ def run(
     ref_levels: dict,
     contrast: list[str],
 ) -> AnalysisResult:
-    from DESeqEngine import DESeqEngine  # mounted at /deseq_src/backend
+    from app.engine.DESeqEngine import DESeqEngine
 
     counts_path = metadata_path = None
     try:

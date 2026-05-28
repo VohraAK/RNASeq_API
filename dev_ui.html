@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RNASeq API — Dev UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    /* ── Layout ── */
+    body { margin: 0; }
+    #layout {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      background: var(--pico-card-background-color);
+      border-right: 1px solid var(--pico-muted-border-color);
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    #sidebar h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+    #sidebar nav a {
+      display: block;
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      text-decoration: none;
+      color: var(--pico-color);
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    #sidebar nav a:hover { background: var(--pico-muted-background-color); }
+    #sidebar nav a.active {
+      background: var(--pico-primary);
+      color: #fff;
+    }
+
+    /* ── Auth mode toggle ── */
+    #auth-mode-block {
+      margin-top: auto;
+      padding-top: 1rem;
+      border-top: 1px solid var(--pico-muted-border-color);
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 0.25rem 0;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid var(--pico-primary);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--pico-primary);
+    }
+    .mode-btn.active-mode {
+      background: var(--pico-primary);
+      color: #fff;
+      font-weight: bold;
+    }
+
+    /* ── Main ── */
+    #main {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+    }
+
+    /* ── Sections ── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── Toasts ── */
+    #toasts {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 9999;
+    }
+    .toast {
+      padding: 0.6rem 1.1rem;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.875rem;
+      max-width: 340px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      animation: slideIn 0.2s ease;
+    }
+    .toast.success { background: #27ae60; }
+    .toast.error   { background: #c0392b; }
+    .toast.info    { background: #2980b9; }
+    @keyframes slideIn {
+      from { transform: translateX(110%); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* ── Utility ── */
+    .mono {
+      font-family: monospace;
+      font-size: 0.82rem;
+      word-break: break-all;
+      background: var(--pico-code-background-color);
+      padding: 0.25rem 0.45rem;
+      border-radius: 4px;
+    }
+    .raw-key-box {
+      background: #fffde7;
+      border: 1px solid #f9a825;
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-weight: bold;
+      letter-spacing: 0.03em;
+    }
+    .QUEUED    { background: #f0c040; color: #333; }
+    .RUNNING   { background: #2980b9; color: #fff; }
+    .COMPLETED { background: #27ae60; color: #fff; }
+    .FAILED    { background: #e74c3c; color: #fff; }
+    .CANCELLED { background: #95a5a6; color: #fff; }
+
+    table { font-size: 0.82rem; }
+    img.plot {
+      max-width: 100%;
+      border: 1px solid var(--pico-muted-border-color);
+      border-radius: 6px;
+      margin-top: 0.5rem;
+    }
+    .field-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .field-row label { margin: 0; }
+    input[type="number"] { width: 90px; }
+    input { font-size: 0.85rem !important; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    small.muted { color: var(--pico-muted-color); }
+  </style>
+</head>
+<body>
+<div id="layout">
+
+  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <aside id="sidebar">
+    <h2>🧬 RNASeq API</h2>
+    <nav>
+      <a data-section="health" class="active">🩺 Health</a>
+      <a data-section="auth">🔐 Auth</a>
+      <a data-section="files">📁 Files</a>
+      <a data-section="jobs">⚙️ Jobs</a>
+      <a data-section="results">📊 Results</a>
+    </nav>
+
+    <div id="auth-mode-block">
+      <small><strong>Auth Mode</strong></small>
+      <div style="display:flex;gap:0.4rem;margin-top:0.35rem;">
+        <button id="btn-jwt"    class="mode-btn active-mode" onclick="setAuthMode('jwt')">JWT</button>
+        <button id="btn-apikey" class="mode-btn"             onclick="setAuthMode('apikey')">API Key</button>
+      </div>
+      <small id="auth-status" class="muted" style="display:block;margin-top:0.4rem;"></small>
+    </div>
+  </aside>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <main id="main">
+
+    <!-- ── HEALTH ── -->
+    <section id="section-health" class="section active">
+      <h3>Health</h3>
+      <button onclick="checkHealth()">Ping API</button>
+      <div id="health-result" style="margin-top:1rem;"></div>
+    </section>
+
+    <!-- ── AUTH ── -->
+    <section id="section-auth" class="section">
+      <h3>Auth</h3>
+
+      <div class="grid">
+        <!-- Register -->
+        <article>
+          <header><strong>Register</strong></header>
+          <label>Email
+            <input id="reg-email" type="email" placeholder="user@example.com">
+          </label>
+          <label>Password
+            <input id="reg-password" type="password" placeholder="••••••••">
+          </label>
+          <button onclick="doRegister()">Register</button>
+          <div id="reg-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
+        </article>
+
+        <!-- Login / Logout -->
+        <article>
+          <header><strong>Login</strong></header>
+          <label>Email
+            <input id="login-email" type="email" placeholder="user@example.com">
+          </label>
+          <label>Password
+            <input id="login-password" type="password" placeholder="••••••••">
+          </label>
+          <div style="display:flex;gap:0.5rem;">
+            <button onclick="doLogin()">Login</button>
+            <button class="secondary outline" onclick="doLogout()">Logout</button>
+          </div>
+          <div id="login-result" style="margin-top:0.5rem;font-size:0.85rem;"></div>
+        </article>
+      </div>
+
+      <!-- API Keys -->
+      <article>
+        <header>
+          <strong>API Keys</strong>
+          <button class="outline" style="float:right;padding:0.2rem 0.6rem;font-size:0.8rem;" onclick="listApiKeys()">↻ Refresh</button>
+        </header>
+
+        <!-- Create key -->
+        <div class="field-row" style="margin-bottom:0.75rem;">
+          <label style="flex:1;min-width:140px;">
+            Key name
+            <input id="apikey-name" type="text" placeholder="my-script" style="width:100%;margin-top:0.2rem;">
+          </label>
+          <button onclick="createApiKey()">Create Key</button>
+        </div>
+
+        <!-- New key display (shown once) -->
+        <div id="new-key-display"></div>
+
+        <!-- Keys table -->
+        <div id="api-keys-table"></div>
+
+        <!-- Persist API key for requests -->
+        <hr style="margin:1rem 0 0.75rem;">
+        <label>
+          <small>API key to use for requests (paste raw key here):</small>
+          <div style="display:flex;gap:0.4rem;margin-top:0.2rem;">
+            <input id="stored-apikey-input" type="text" placeholder="rnaseq_sk_…"
+                   style="font-family:monospace;font-size:0.8rem;flex:1;">
+            <button class="outline" onclick="saveStoredApiKey()">Save</button>
+          </div>
+        </label>
+      </article>
+    </section>
+
+    <!-- ── FILES ── -->
+    <section id="section-files" class="section">
+      <h3>Files</h3>
+      <div class="grid">
+
+        <!-- Counts -->
+        <article>
+          <header><strong>Counts Matrix</strong></header>
+          <input id="counts-file-input" type="file" accept=".csv">
+          <button onclick="uploadFile('counts')">Upload</button>
+          <div style="margin-top:0.6rem;">
+            <small class="muted">File ID (auto-carries to Jobs):</small>
+            <div class="mono" id="counts-file-id" style="margin-top:0.25rem;">—</div>
+          </div>
+        </article>
+
+        <!-- Metadata -->
+        <article>
+          <header><strong>Metadata</strong></header>
+          <input id="metadata-file-input" type="file" accept=".csv">
+          <button onclick="uploadFile('metadata')">Upload</button>
+          <div style="margin-top:0.6rem;">
+            <small class="muted">File ID (auto-carries to Jobs):</small>
+            <div class="mono" id="metadata-file-id" style="margin-top:0.25rem;">—</div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ── JOBS ── -->
+    <section id="section-jobs" class="section">
+      <h3>Jobs</h3>
+
+      <!-- Submit -->
+      <article>
+        <header><strong>Submit Job</strong></header>
+        <div class="grid">
+          <label>Counts File ID
+            <input id="job-counts-id" type="text" placeholder="auto from Files"
+                   style="font-family:monospace;font-size:0.82rem;">
+          </label>
+          <label>Metadata File ID
+            <input id="job-metadata-id" type="text" placeholder="auto from Files"
+                   style="font-family:monospace;font-size:0.82rem;">
+          </label>
+        </div>
+
+        <label>Design Formula
+          <input id="job-formula" type="text" placeholder="~ condition" value="~ condition">
+        </label>
+
+        <label>
+          ref_levels &nbsp;<small class="muted">(JSON object: {"factor": "ref"})</small>
+          <input id="job-reflevels" type="text" placeholder='{"condition": "control"}' value='{"condition": "control"}'>
+        </label>
+
+        <div class="grid">
+          <label>Contrast — Factor
+            <input id="job-factor" type="text" placeholder="condition">
+          </label>
+          <label>Treatment
+            <input id="job-treatment" type="text" placeholder="treated">
+          </label>
+          <label>Control (reference)
+            <input id="job-control" type="text" placeholder="control">
+          </label>
+        </div>
+
+        <button onclick="submitJob()">Submit Job</button>
+      </article>
+
+      <!-- Status + polling -->
+      <article>
+        <header><strong>Job Status</strong></header>
+
+        <div class="field-row">
+          <label style="flex:1;min-width:200px;">
+            Job ID
+            <input id="job-status-id" type="text" placeholder="auto from submit"
+                   style="font-family:monospace;font-size:0.82rem;margin-top:0.2rem;width:100%;">
+          </label>
+          <button class="outline" onclick="fetchJobStatus()">Fetch Once</button>
+          <button class="secondary outline" onclick="cancelJob()">Cancel Job</button>
+        </div>
+
+        <div id="job-status-display" style="margin-top:0.75rem;"></div>
+        <small id="poll-indicator" class="muted"></small>
+        <div id="view-results-btn" style="margin-top:0.75rem;display:none;">
+          <button onclick="showSection('results')">📊 View Results →</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- ── RESULTS ── -->
+    <section id="section-results" class="section">
+      <h3>Results</h3>
+
+      <!-- Table -->
+      <article>
+        <header><strong>DEG Table</strong></header>
+
+        <!-- Row 1: Job ID -->
+        <label>
+          Job ID
+          <input id="results-job-id" type="text" placeholder="auto from Jobs"
+                 style="font-family:monospace;font-size:0.82rem;width:100%;margin-top:0.2rem;">
+        </label>
+
+        <!-- Row 2: Filters -->
+        <div class="field-row" style="margin-top:0.5rem;">
+          <label style="margin:0;">
+            padj ≤
+            <input id="results-padj" type="number" step="0.01" min="0" max="1" placeholder="0.05"
+                   style="margin-top:0.2rem;">
+          </label>
+          <label style="margin:0;">
+            |log2FC| ≥
+            <input id="results-lfc" type="number" step="0.1" min="0" placeholder="1.0"
+                   style="margin-top:0.2rem;">
+          </label>
+        </div>
+
+        <!-- Row 3: Page size + Fetch (right-justified) -->
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:0.5rem;margin-top:0.5rem;margin-bottom:0.75rem;">
+          <label style="margin:0;display:flex;align-items:center;gap:0.4rem;">
+            <span style="white-space:nowrap;font-size:0.85rem;">Page size</span>
+            <input id="results-limit" type="number" value="50" min="1" max="1000" style="margin:0;width:70px;">
+          </label>
+          <button style="margin:0;" onclick="fetchResults(1)">Fetch</button>
+        </div>
+
+        <div id="results-table-container" style="overflow-x:auto;"></div>
+        <div id="results-pagination" style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;"></div>
+      </article>
+
+      <!-- Plots -->
+      <article>
+        <header><strong>Plots</strong></header>
+        <div class="field-row" style="margin-bottom:0.5rem;">
+          <label style="margin:0;">
+            padj threshold
+            <input id="plot-padj" type="number" step="0.01" value="0.05" style="margin-top:0.2rem;">
+          </label>
+          <label style="margin:0;">
+            lfc threshold <small class="muted">(volcano)</small>
+            <input id="plot-lfc" type="number" step="0.1" value="1.0" style="margin-top:0.2rem;">
+          </label>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+          <button onclick="fetchPlotImg('volcano')">🌋 Volcano</button>
+          <button class="secondary outline" onclick="fetchPlotImg('ma')">📈 MA Plot</button>
+        </div>
+
+        <div class="grid">
+          <figure style="margin:0;">
+            <img id="volcano-img" class="plot" style="display:none;" alt="Volcano plot">
+            <figcaption id="volcano-caption" style="display:none;font-size:0.8rem;color:var(--pico-muted-color);margin-top:0.3rem;">Volcano plot</figcaption>
+          </figure>
+          <figure style="margin:0;">
+            <img id="ma-img" class="plot" style="display:none;" alt="MA plot">
+            <figcaption id="ma-caption" style="display:none;font-size:0.8rem;color:var(--pico-muted-color);margin-top:0.3rem;">MA plot</figcaption>
+          </figure>
+        </div>
+      </article>
+    </section>
+
+  </main><!-- /main -->
+</div><!-- /layout -->
+
+<!-- ═══════ TOASTS ═══════ -->
+<div id="toasts"></div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════ -->
+<script>
+// ──────────────────────────────────────────
+// CONFIG — edit BASE if API runs elsewhere
+// ──────────────────────────────────────────
+const BASE = 'http://localhost:8000/api/v1';
+
+// ──────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────
+const S = {
+  authMode:      localStorage.getItem('_rna_mode')  || 'jwt',
+  jwtToken:      localStorage.getItem('_rna_jwt')   || '',
+  apiKey:        localStorage.getItem('_rna_apikey') || '',
+  countsFileId:  '',
+  metadataFileId:'',
+  currentJobId:  '',
+  pollTimer:     null,
+};
+
+// ──────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar nav clicks
+  document.querySelectorAll('#sidebar nav a').forEach(a => {
+    a.addEventListener('click', () => showSection(a.dataset.section));
+  });
+
+  setAuthMode(S.authMode, false);
+
+  // Prefill stored API key input
+  document.getElementById('stored-apikey-input').value = S.apiKey;
+});
+
+// ──────────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────────
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('#sidebar nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById(`section-${name}`).classList.add('active');
+  document.querySelector(`[data-section="${name}"]`).classList.add('active');
+
+  // Carry IDs forward when switching sections
+  if (name === 'jobs') {
+    if (S.countsFileId)   document.getElementById('job-counts-id').value   = S.countsFileId;
+    if (S.metadataFileId) document.getElementById('job-metadata-id').value = S.metadataFileId;
+    if (S.currentJobId)   document.getElementById('job-status-id').value   = S.currentJobId;
+  }
+  if (name === 'results') {
+    if (S.currentJobId) document.getElementById('results-job-id').value = S.currentJobId;
+  }
+}
+
+// ──────────────────────────────────────────
+// AUTH MODE
+// ──────────────────────────────────────────
+function setAuthMode(mode, save = true) {
+  S.authMode = mode;
+  if (save) localStorage.setItem('_rna_mode', mode);
+
+  document.getElementById('btn-jwt').classList.toggle('active-mode', mode === 'jwt');
+  document.getElementById('btn-apikey').classList.toggle('active-mode', mode === 'apikey');
+  updateAuthStatus();
+}
+
+function updateAuthStatus() {
+  const el = document.getElementById('auth-status');
+  if (S.authMode === 'jwt') {
+    el.textContent = S.jwtToken ? '✓ JWT stored' : '✗ No JWT token';
+  } else {
+    el.textContent = S.apiKey ? '✓ API key stored' : '✗ No API key';
+  }
+}
+
+function authHeaders() {
+  if (S.authMode === 'jwt' && S.jwtToken)   return { 'Authorization': `Bearer ${S.jwtToken}` };
+  if (S.authMode === 'apikey' && S.apiKey)  return { 'X-API-Key': S.apiKey };
+  return {};
+}
+
+// ──────────────────────────────────────────
+// API HELPERS
+// ──────────────────────────────────────────
+async function api(method, path, body = null, isFormData = false) {
+  const headers = { ...authHeaders() };
+  const opts = { method, headers };
+
+  if (body !== null && !isFormData) {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  } else if (isFormData) {
+    opts.body = body; // browser sets Content-Type with boundary
+  }
+
+  const res = await fetch(BASE + path, opts);
+  if (res.status === 204) return null;
+
+  const json = await res.json();
+  if (!res.ok) {
+    // API wraps custom errors in {error:{code,message}}, FastAPI validation in {detail:[...]}
+    const envelope = json.error;
+    const detail   = json.detail;
+    let msg;
+    if (envelope?.message) {
+      msg = `${envelope.code}: ${envelope.message}`;
+    } else if (detail && typeof detail === 'object' && !Array.isArray(detail) && detail.message) {
+      msg = detail.message;
+    } else if (Array.isArray(detail) && detail[0]?.msg) {
+      msg = detail.map(d => d.msg).join('; ');
+    } else {
+      msg = String(envelope?.code || detail || `HTTP ${res.status}`);
+    }
+    throw new Error(msg);
+  }
+  return json;
+}
+
+async function apiBinary(path) {
+  const res = await fetch(BASE + path, { headers: authHeaders() });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.detail?.message || `HTTP ${res.status}`);
+  }
+  return res.blob();
+}
+
+// ──────────────────────────────────────────
+// TOASTS
+// ──────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ──────────────────────────────────────────
+// HEALTH
+// ──────────────────────────────────────────
+async function checkHealth() {
+  const el = document.getElementById('health-result');
+  try {
+    const data = await fetch(BASE + '/health').then(r => r.json());
+    el.innerHTML = `<pre class="mono" style="padding:0.75rem;">${JSON.stringify(data, null, 2)}</pre>`;
+    toast('API reachable', 'success');
+  } catch (e) {
+    el.innerHTML = `<span style="color:red;">✗ ${e.message}</span>`;
+    toast(e.message, 'error');
+  }
+}
+
+// ──────────────────────────────────────────
+// AUTH — REGISTER / LOGIN / LOGOUT
+// ──────────────────────────────────────────
+async function doRegister() {
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const out      = document.getElementById('reg-result');
+  if (!email || !password) { toast('Email and password required', 'error'); return; }
+  try {
+    const res = await api('POST', '/auth/register', { email, password });
+    out.textContent = `✓ Registered: ${res.data.email}`;
+    toast('Registered', 'success');
+  } catch (e) {
+    out.textContent = `✗ ${e.message}`;
+    toast(e.message, 'error');
+  }
+}
+
+async function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const out      = document.getElementById('login-result');
+  if (!email || !password) { toast('Email and password required', 'error'); return; }
+  try {
+    const res = await api('POST', '/auth/login', { email, password });
+    S.jwtToken = res.data.access_token;
+    localStorage.setItem('_rna_jwt', S.jwtToken);
+    out.textContent = `✓ Logged in (token expires in 15 min)`;
+    updateAuthStatus();
+    toast('Logged in', 'success');
+  } catch (e) {
+    out.textContent = `✗ ${e.message}`;
+    toast(e.message, 'error');
+  }
+}
+
+async function doLogout() {
+  const out = document.getElementById('login-result');
+  try { await api('POST', '/auth/logout'); } catch (_) { /* ignore */ }
+  S.jwtToken = '';
+  localStorage.removeItem('_rna_jwt');
+  out.textContent = '✓ Logged out';
+  updateAuthStatus();
+  toast('Logged out', 'info');
+}
+
+// ──────────────────────────────────────────
+// AUTH — API KEYS
+// ──────────────────────────────────────────
+async function listApiKeys() {
+  try {
+    const res = await api('GET', '/users/me/api-keys');
+    renderKeysTable(res.data);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderKeysTable(keys) {
+  const el = document.getElementById('api-keys-table');
+  if (!keys.length) { el.innerHTML = '<small class="muted">No active keys.</small>'; return; }
+  const rows = keys.map(k => `
+    <tr>
+      <td>${escHtml(k.name)}</td>
+      <td class="mono" style="font-size:0.72rem;">${k.key_id}</td>
+      <td>${k.expires_at ? new Date(k.expires_at).toLocaleDateString() : '—'}</td>
+      <td>
+        <button class="outline secondary"
+                style="padding:0.1rem 0.4rem;font-size:0.75rem;"
+                onclick="revokeApiKey('${k.key_id}')">Revoke</button>
+      </td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>Name</th><th>ID</th><th>Expires</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function createApiKey() {
+  const name = document.getElementById('apikey-name').value.trim();
+  if (!name) { toast('Key name required', 'error'); return; }
+  try {
+    const res = await api('POST', '/users/me/api-keys', { name });
+    const k   = res.data;
+    window._pendingRawKey = k.raw_key;
+    document.getElementById('new-key-display').innerHTML = `
+      <div class="raw-key-box">
+        <strong>⚠ Copy now — shown only once:</strong><br>
+        <span class="mono" style="display:block;margin:0.4rem 0;">${escHtml(k.raw_key)}</span>
+        <button class="outline"
+                style="padding:0.2rem 0.5rem;font-size:0.75rem;"
+                onclick="navigator.clipboard.writeText(window._pendingRawKey).then(()=>toast('Copied!','success'))">
+          Copy
+        </button>
+      </div>`;
+    toast('API key created', 'success');
+    listApiKeys();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function revokeApiKey(keyId) {
+  try {
+    await api('DELETE', `/users/me/api-keys/${keyId}`);
+    toast('Key revoked', 'info');
+    listApiKeys();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function saveStoredApiKey() {
+  S.apiKey = document.getElementById('stored-apikey-input').value.trim();
+  localStorage.setItem('_rna_apikey', S.apiKey);
+  updateAuthStatus();
+  toast('API key saved', 'success');
+}
+
+// ──────────────────────────────────────────
+// FILES
+// ──────────────────────────────────────────
+async function uploadFile(type) {
+  const inputId  = type === 'counts' ? 'counts-file-input' : 'metadata-file-input';
+  const displayId = type === 'counts' ? 'counts-file-id'   : 'metadata-file-id';
+  const fileInput = document.getElementById(inputId);
+  const file      = fileInput.files[0];
+  if (!file) { toast('Select a CSV file first', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('file_type', type === 'counts' ? 'counts' : 'metadata');
+
+  try {
+    const res    = await api('POST', '/files/', fd, true);
+    const fileId = res.data.file_id;
+
+    document.getElementById(displayId).textContent = fileId;
+
+    if (type === 'counts')   S.countsFileId   = fileId;
+    else                     S.metadataFileId = fileId;
+
+    toast(`${type} uploaded: ${file.name}`, 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────
+// JOBS — SUBMIT
+// ──────────────────────────────────────────
+async function submitJob() {
+  const countsId   = document.getElementById('job-counts-id').value.trim()   || S.countsFileId;
+  const metaId     = document.getElementById('job-metadata-id').value.trim() || S.metadataFileId;
+  const formula    = document.getElementById('job-formula').value.trim();
+  const refRaw     = document.getElementById('job-reflevels').value.trim();
+  const factor     = document.getElementById('job-factor').value.trim();
+  const treatment  = document.getElementById('job-treatment').value.trim();
+  const control    = document.getElementById('job-control').value.trim();
+
+  if (!countsId || !metaId || !formula || !refRaw || !factor || !treatment || !control) {
+    toast('All fields required', 'error'); return;
+  }
+
+  let refLevels;
+  try { refLevels = JSON.parse(refRaw); }
+  catch { toast('ref_levels must be valid JSON (e.g. {"condition":"control"})', 'error'); return; }
+
+  const body = {
+    counts_file_id:   countsId,
+    metadata_file_id: metaId,
+    design_formula:   formula,
+    ref_levels:       refLevels,
+    contrast:         [factor, treatment, control],
+  };
+
+  try {
+    const res = await api('POST', '/jobs/', body);
+    const job = res.data;
+    S.currentJobId = job.job_id;
+    document.getElementById('job-status-id').value = job.job_id;
+    document.getElementById('view-results-btn').style.display = 'none';
+    renderJobStatus(job);
+    toast('Job submitted', 'success');
+    startPolling();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────
+// JOBS — STATUS / POLL / CANCEL
+// ──────────────────────────────────────────
+async function fetchJobStatus() {
+  const jobId = document.getElementById('job-status-id').value.trim();
+  if (!jobId) { toast('Job ID required', 'error'); return null; }
+  try {
+    const res = await api('GET', `/jobs/${jobId}`);
+    renderJobStatus(res.data);
+    return res.data.status;
+  } catch (e) { toast(e.message, 'error'); return null; }
+}
+
+function renderJobStatus(job) {
+  document.getElementById('job-status-display').innerHTML = `
+    <table>
+      <tr><td><strong>Job ID</strong></td>
+          <td class="mono">${job.job_id}</td></tr>
+      <tr><td><strong>Status</strong></td>
+          <td><span class="status-badge ${job.status}">${job.status}</span></td></tr>
+      <tr><td><strong>Created</strong></td>
+          <td>${fmtDate(job.created_at)}</td></tr>
+      <tr><td><strong>Started</strong></td>
+          <td>${job.started_at   ? fmtDate(job.started_at)   : '—'}</td></tr>
+      <tr><td><strong>Completed</strong></td>
+          <td>${job.completed_at ? fmtDate(job.completed_at) : '—'}</td></tr>
+      ${job.error_message
+        ? `<tr><td><strong>Error</strong></td>
+               <td style="color:var(--pico-del-color);">${escHtml(job.error_message)}</td></tr>`
+        : ''}
+    </table>`;
+
+  if (job.status === 'COMPLETED') {
+    S.currentJobId = job.job_id;
+    document.getElementById('results-job-id').value = job.job_id;
+    document.getElementById('view-results-btn').style.display = 'block';
+  }
+}
+
+function startPolling() {
+  const jobId = document.getElementById('job-status-id').value.trim();
+  if (!jobId) { toast('Job ID required', 'error'); return; }
+  stopPolling();
+
+  document.getElementById('poll-indicator').textContent = 'Polling every 2s…';
+
+  S.pollTimer = setInterval(async () => {
+    const status = await fetchJobStatus();
+    if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
+      stopPolling();
+      toast(`Job ${status}`, status === 'COMPLETED' ? 'success' : 'error');
+    }
+  }, 2000);
+}
+
+function stopPolling() {
+  if (S.pollTimer) {
+    clearInterval(S.pollTimer);
+    S.pollTimer = null;
+    document.getElementById('poll-indicator').textContent = '';
+  }
+}
+
+async function cancelJob() {
+  const jobId = document.getElementById('job-status-id').value.trim();
+  if (!jobId) { toast('Job ID required', 'error'); return; }
+  try {
+    const res = await api('DELETE', `/jobs/${jobId}`);
+    renderJobStatus(res.data);
+    toast('Job cancelled', 'info');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────
+// RESULTS — TABLE
+// ──────────────────────────────────────────
+async function fetchResults(page = 1) {
+  const jobId = document.getElementById('results-job-id').value.trim() || S.currentJobId;
+  if (!jobId) { toast('Job ID required', 'error'); return; }
+
+  const limit = parseInt(document.getElementById('results-limit').value) || 50;
+  const padj  = document.getElementById('results-padj').value;
+  const lfc   = document.getElementById('results-lfc').value;
+
+  let qs = `?page=${page}&limit=${limit}`;
+  if (padj) qs += `&padj_max=${padj}`;
+  if (lfc)  qs += `&log2fc_min=${lfc}`;
+
+  try {
+    const res = await api('GET', `/results/${jobId}${qs}`);
+    renderTable(res.data, res.meta, page);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderTable(genes, meta, page) {
+  const container = document.getElementById('results-table-container');
+  const pag       = document.getElementById('results-pagination');
+
+  if (!genes.length) {
+    container.innerHTML = '<small class="muted">No results match filters.</small>';
+    pag.innerHTML = '';
+    return;
+  }
+
+  const fmt = v => (v == null ? '—' : typeof v === 'number' && v < 0.001
+    ? v.toExponential(2) : typeof v === 'number' ? v.toFixed(3) : v);
+
+  const rows = genes.map(g => `
+    <tr>
+      <td>${escHtml(g.gene_name)}</td>
+      <td>${g.base_mean != null ? g.base_mean.toFixed(2) : '—'}</td>
+      <td>${fmt(g.log2_fold_change)}</td>
+      <td>${fmt(g.lfc_se)}</td>
+      <td>${fmt(g.stat)}</td>
+      <td>${fmt(g.pvalue)}</td>
+      <td>${fmt(g.padj)}</td>
+    </tr>`).join('');
+
+  container.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Gene</th>
+        <th>baseMean</th>
+        <th>log2FC</th>
+        <th>lfcSE</th>
+        <th>stat</th>
+        <th>pvalue</th>
+        <th>padj</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  const { pages, total } = meta;
+  pag.innerHTML = `
+    <button class="outline" ${page <= 1 ? 'disabled' : ''} onclick="fetchResults(${page-1})">← Prev</button>
+    <span style="font-size:0.82rem;">Page ${page} / ${pages} &nbsp;·&nbsp; ${total.toLocaleString()} genes</span>
+    <button class="outline" ${page >= pages ? 'disabled' : ''} onclick="fetchResults(${page+1})">Next →</button>`;
+}
+
+// ──────────────────────────────────────────
+// RESULTS — PLOTS
+// ──────────────────────────────────────────
+async function fetchPlotImg(type) {
+  const jobId = document.getElementById('results-job-id').value.trim() || S.currentJobId;
+  if (!jobId) { toast('Job ID required', 'error'); return; }
+
+  const padj = document.getElementById('plot-padj').value || '0.05';
+  const lfc  = document.getElementById('plot-lfc').value  || '1.0';
+
+  const qs = type === 'volcano'
+    ? `?padj_threshold=${padj}&lfc_threshold=${lfc}`
+    : `?padj_threshold=${padj}`;
+
+  try {
+    const blob = await apiBinary(`/results/${jobId}/${type}${qs}`);
+    const url  = URL.createObjectURL(blob);
+    const img     = document.getElementById(`${type}-img`);
+    const caption = document.getElementById(`${type}-caption`);
+    if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+    img.src = url;
+    img.style.display = 'block';
+    if (caption) caption.style.display = 'block';
+    toast(`${type} plot loaded`, 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ──────────────────────────────────────────
+// UTILS
+// ──────────────────────────────────────────
+function fmtDate(iso) {
+  return iso ? new Date(iso).toLocaleString() : '—';
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>

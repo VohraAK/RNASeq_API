@@ -1,8 +1,6 @@
 services:
   api:
     restart: always
-    environment:
-      PYTHONPATH: /app:/deseq_src/backend
     deploy:
       resources:
         limits:
@@ -10,8 +8,6 @@ services:
 
   worker:
     restart: always
-    environment:
-      PYTHONPATH: /app:/deseq_src/backend
     deploy:
       resources:
         limits:

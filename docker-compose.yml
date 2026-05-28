@@ -6,9 +6,6 @@ services:
     env_file: .env
     volumes:
       - uploads:/var/rnaseq/uploads
-      - ../gui_rna_seq/src:/deseq_src:ro
-    environment:
-      PYTHONPATH: /app:/deseq_src/backend
     depends_on:
       db:
         condition: service_healthy
@@ -24,9 +21,6 @@ services:
     env_file: .env
     volumes:
       - uploads:/var/rnaseq/uploads
-      - ../gui_rna_seq/src:/deseq_src:ro
-    environment:
-      PYTHONPATH: /app:/deseq_src/backend
     depends_on:
       db:
         condition: service_healthy

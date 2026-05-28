@@ -186,12 +186,13 @@ def patch_deseq(engine_instance):
 
 @contextmanager
 def _patch_module(mod):
-    original = sys.modules.get("DESeqEngine")
-    sys.modules["DESeqEngine"] = mod
+    key = "app.engine.DESeqEngine"
+    original = sys.modules.get(key)
+    sys.modules[key] = mod
     try:
         yield
     finally:
         if original is None:
-            sys.modules.pop("DESeqEngine", None)
+            sys.modules.pop(key, None)
         else:
-            sys.modules["DESeqEngine"] = original
+            sys.modules[key] = original

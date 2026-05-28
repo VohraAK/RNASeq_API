@@ -76,6 +76,23 @@ async def submit_job(
             detail={"code": "VALIDATION_ERROR", "message": f"File {body.metadata_file_id} is not a metadata file."},
         )
 
+    from sqlalchemy.dialects.postgresql import JSONB
+    from sqlalchemy import cast
+
+    active_job = await db.scalar(
+        select(Job).where(
+            Job.user_id == current_user.id,
+            Job.counts_file_id == body.counts_file_id,
+            Job.metadata_file_id == body.metadata_file_id,
+            Job.design_formula == body.design_formula,
+            Job.ref_levels == cast(body.ref_levels, JSONB),
+            Job.contrast == cast(body.contrast, JSONB),
+            Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+        )
+    )
+    if active_job is not None:
+        return _job_response(active_job)
+
     job = Job(
         user_id=current_user.id,
         counts_file_id=body.counts_file_id,

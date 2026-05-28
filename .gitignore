@@ -11,4 +11,3 @@ dist/
 .ruff_cache/
 docs/superpowers/
 *.md
-dev_ui.html
