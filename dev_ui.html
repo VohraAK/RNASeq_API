@@ -543,11 +543,14 @@ async function api(method, path, body = null, isFormData = false) {
     } else if (detail && typeof detail === 'object' && !Array.isArray(detail) && detail.message) {
       msg = detail.message;
     } else if (Array.isArray(detail) && detail[0]?.msg) {
-      msg = detail.map(d => d.msg).join('; ');
+      msg = detail.map(d => {
+        const field = d.loc?.slice(-1)[0] ?? '';
+        return field ? `${field}: ${d.msg}` : d.msg;
+      }).join('; ');
     } else {
       msg = String(envelope?.code || detail || `HTTP ${res.status}`);
     }
-    throw new Error(msg);
+    throw new Error(`[${res.status}] ${msg}`);
   }
   return json;
 }
@@ -556,7 +559,17 @@ async function apiBinary(path) {
   const res = await fetch(BASE + path, { headers: authHeaders() });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
-    throw new Error(json.detail?.message || `HTTP ${res.status}`);
+    const detail = json.detail;
+    let msg;
+    if (Array.isArray(detail) && detail[0]?.msg) {
+      msg = detail.map(d => {
+        const field = d.loc?.slice(-1)[0] ?? '';
+        return field ? `${field}: ${d.msg}` : d.msg;
+      }).join('; ');
+    } else {
+      msg = detail?.message || String(detail || `HTTP ${res.status}`);
+    }
+    throw new Error(`[${res.status}] ${msg}`);
   }
   return res.blob();
 }
@@ -569,7 +582,7 @@ function toast(msg, type = 'info') {
   el.className = `toast ${type}`;
   el.textContent = msg;
   document.getElementById('toasts').appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), type === 'error' ? 7000 : 4000);
 }
 
 // ──────────────────────────────────────────

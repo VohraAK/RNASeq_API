@@ -16,8 +16,8 @@ services:
   worker:
     build: .
     command: >
-      sh -c "procrastinate --app app.workers.tasks.procrastinate_app schema --apply || true &&
-             procrastinate --app app.workers.tasks.procrastinate_app worker --concurrency 1"
+      sh -c "python3 -m procrastinate --app app.workers.tasks.procrastinate_app schema --apply || true &&
+             python3 -m procrastinate --app app.workers.tasks.procrastinate_app worker --concurrency 1"
     env_file: .env
     volumes:
       - uploads:/var/rnaseq/uploads
